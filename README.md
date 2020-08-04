@@ -7,6 +7,8 @@ Installation
     @audit_util_ps.sql
     @audit_utl_pb.sql
 
+Ensure you edit each file to nominate the schema and tablespace you want to use. Needs to be run as DBA (naturally).
+
 Functionality
 ================
 The generator allows
