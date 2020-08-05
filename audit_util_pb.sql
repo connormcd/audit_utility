@@ -8,49 +8,55 @@ IS
 --
 -- global vars for new audit table support
 --
-  g_aud_schema      varchar2(10)  := upper('&&schema');
-  g_aud_tspace      varchar2(30)  := '&&tspace';
+  g_aud_schema      constant varchar2(10)  := upper('&&schema');
+  g_aud_tspace      constant varchar2(30)  := '&&tspace';
   
   -- prefix for all audit table names
   --
-  g_aud_prefix      varchar2(10)  := '';
+  g_aud_prefix      constant varchar2(10)  := '';
   
   -- 1= dbms_output, 2=maint table, 3=both
   --
-  g_log_level       int           := 3;  
+  g_log_level       constant int           := 3;  
   
   -- by default, just updates/deletes
   --
-  g_inserts_audited boolean       := true;  
+  g_inserts_audited constant boolean       := false;  
   
   -- sometimes an update is really a logical deleted. If you set a column
   -- named as per below to 'Y', we'll audit it as a logical delete, not an update
   --
-  g_logical_del_col varchar2(100) := 'DELETED_IND';  
+  g_logical_del_col constant varchar2(100) := 'DELETED_IND';  
   
   -- whether we want to capture OLD images for updates as well as NEW
   --
-  g_capture_new_updates boolean := true;
+  g_capture_new_updates constant boolean := false;
 
   -- if you want an automated scheduler job to look at auto-renaming
   -- partitions, there is the name it gets
   --
-  g_job_name     varchar2(80) := 'AUDIT_PARTITION_NAME_TIDY_UP';
+  g_job_name     constant varchar2(80) := 'AUDIT_PARTITION_NAME_TIDY_UP';
 
   --
   -- where we should create the trigger (true=audit schema, false=table owning schema)
   --
-  g_trigger_in_audit_schema boolean := true;
+  g_trigger_in_audit_schema constant boolean := true;
 
   --
   -- should we use partitioning
   --
-  g_partitioning boolean := true;
+  g_partitioning  constant boolean  := true;
   
   --
   -- should we use bulk binding (aka, are you expecting batch DML regularly)
   --
-  g_bulk_bind boolean := true;
+  g_bulk_bind constant boolean  := true;
+  g_bulk_bind_limit    int      := 500;
+  
+  --
+  -- should we use a context/WHEN clause or a plsql call for trigger maintenance
+  --
+  g_use_context constant boolean := true;
   
 --
 -- NOTE: In terms of other naming conventions, check the routines
@@ -164,18 +170,22 @@ end;
 function audit_package_name(p_table_name varchar2, p_owner varchar2) return varchar2 is
 begin
   if dup_cnt(p_table_name,p_owner) = 1 then
-    return 'PKG_'||upper(substr(p_table_name,1,26));
+    return 'PKG_'||upper(substr(p_table_name,1,120));
   else
-    return 'PKG_'||upper(substr(p_table_name,1,21))||'_'||upper(p_owner);
+    return 'PKG_'||upper(substr(p_table_name,1,90))||'_'||upper(p_owner);
   end if;
 end;
 
 --
 -- single point for standard audit trigger name (typically "AUD$"<table>)
 --
-function audit_trigger_name(p_table_name varchar2) return varchar2 is
+function audit_trigger_name(p_table_name varchar2, p_owner varchar2) return varchar2 is
 begin
-  return 'AUD$'||upper(substr(p_table_name,1,120));
+  if dup_cnt(p_table_name,p_owner) = 1 then
+    return 'AUD$'||upper(substr(p_table_name,1,120));
+  else
+    return 'AUD$'||upper(substr(p_table_name,1,90))||'_'||upper(p_owner);
+  end if;
 end;
 
 --
@@ -621,12 +631,8 @@ BEGIN
     bld(' ');
     bld('  procedure bulk_process is');
     bld('  begin');
-    bld('    if l_audrows.count = 1 then');
-    bld('      insert into '||g_aud_schema||'.'||audit_table_name(p_table_name,p_owner)||' values l_audrows(1);');
-    bld('    else');
-    bld('      forall i in 1 .. l_audrows.count');
-    bld('        insert into '||g_aud_schema||'.'||audit_table_name(p_table_name,p_owner)||' values l_audrows(i);');
-    bld('    end if;');
+    bld('    forall i in 1 .. l_audrows.count');
+    bld('      insert into '||g_aud_schema||'.'||audit_table_name(p_table_name,p_owner)||' values l_audrows(i);');
     bld('    bulk_init;');
     bld('  end;');
     bld(' ');
@@ -659,6 +665,11 @@ BEGIN
 
   if g_bulk_bind then
 
+    bld('    if l_idx > '||g_bulk_bind_limit||' then');
+    bld('      bulk_process;');
+    bld('      l_idx := 1;');
+    bld('    end if;');
+    bld(' ');
     bld('    l_audrows(l_idx).aud$tstamp := p_aud$tstamp;');
     bld('    l_audrows(l_idx).aud$id     := p_aud$id;');
     bld('    l_audrows(l_idx).aud$image  := p_aud$image;');
@@ -726,6 +737,7 @@ PROCEDURE generate_audit_trigger(p_owner varchar2
   l_when_clause varchar2(4000) := p_when_clause;
   l_col_name    varchar2(128);
   l_col_valid   boolean;
+  l_audit_trigger_name varchar2(128) := audit_trigger_name(p_table_name,p_owner);
 
   procedure bld(p_sql varchar2) is
   begin
@@ -810,6 +822,15 @@ BEGIN
     end;
   end if;
 
+  --
+  -- strip off the WHEN to append context if needed
+  --
+  if g_use_context then
+    l_when_clause := 'when ('||substr(l_when_clause,5)||
+                     case when l_when_clause is not null then ' and' end||
+                     ' sys_context(''TRIGGER_CTL'','''||l_audit_trigger_name||''') is null)';
+  end if;
+
   open col_defn;
   fetch col_defn
   bulk collect into cols;
@@ -837,7 +858,7 @@ BEGIN
   bld('create or replace');
   bld('trigger '||
       case when g_trigger_in_audit_schema then g_aud_schema else upper(p_owner) end
-      ||'.'||audit_trigger_name(p_table_name));
+      ||'.'||l_audit_trigger_name);
       
   if g_bulk_bind then      
     bld('for insert or update or delete on '||p_owner||'.'||p_table_name);
@@ -877,17 +898,23 @@ BEGIN
   if g_bulk_bind then      
     bld('before statement is');
     bld('begin');
-    bld(' if '||lower(g_aud_schema)||'.trigger_ctl.enabled('''||audit_trigger_name(p_table_name)||''') then');
+    if not g_use_context then
+      bld(' if '||lower(g_aud_schema)||'.trigger_ctl.enabled('''||l_audit_trigger_name||''') then');
+    end if;
     bld('   '||lower(g_aud_schema||'.'||audit_package_name(p_table_name,p_owner))||'.bulk_init;');
-    bld(' end if;');
+    if not g_use_context then
+      bld(' end if;');
+    end if;
     bld('end before statement;');
     bld(' ');
     bld('after each row is');
   end if;
   
   bld('begin');
-  bld(' if '||lower(g_aud_schema)||'.trigger_ctl.enabled('''||audit_trigger_name(p_table_name)||''') then');
-
+  if not g_use_context then
+    bld(' if '||lower(g_aud_schema)||'.trigger_ctl.enabled('''||l_audit_trigger_name||''') then');
+  end if;
+  
   bld('  l_descr := ');
   bld('    case ');
   if cols(1).logdel is not null then
@@ -937,19 +964,25 @@ BEGIN
     bld('  end if;');
   end if;
 
-  bld(' end if;');
+  if not g_use_context then
+    bld(' end if;');
+  end if;
 
   if g_bulk_bind then   
     bld('end after each row;');
     bld(' ');
     bld('after statement is');
     bld('begin');
-    bld(' if '||lower(g_aud_schema)||'.trigger_ctl.enabled('''||audit_trigger_name(p_table_name)||''') then');
+    if not g_use_context then
+      bld(' if '||lower(g_aud_schema)||'.trigger_ctl.enabled('''||l_audit_trigger_name||''') then');
+    end if;
     bld('   -- log the headers');
     bld('   '||lower(g_aud_schema)||'.audit_pkg.bulk_process;');
     bld('   -- log the details');
     bld('   '||lower(g_aud_schema||'.'||audit_package_name(p_table_name,p_owner))||'.bulk_process;');
-    bld(' end if;');
+    if not g_use_context then
+      bld(' end if;');
+    end if;
     bld('end after statement;');
   end if;
   bld('end;');
@@ -958,7 +991,7 @@ BEGIN
 
   if p_enable_trigger then
     do_sql('alter trigger '||case when g_trigger_in_audit_schema then g_aud_schema else upper(p_owner) end||'.'||
-                  audit_trigger_name(p_table_name)||' enable',upper(p_action)='EXECUTE');
+                  l_audit_trigger_name||' enable',upper(p_action)='EXECUTE');
   end if;
 
 END;
@@ -1016,9 +1049,7 @@ BEGIN
 
 EXCEPTION
     when no_data_found then
-       if not p_force then
-          die('No table '||g_aud_schema||'.'||l_audit_table_name||' was found');
-       end if;
+       logger('INFO: No table '||g_aud_schema||'.'||l_audit_table_name||' was found');
 END;
 
 --
@@ -1038,8 +1069,12 @@ BEGIN
   do_sql('drop package '||g_aud_schema||'.'||audit_package_name(p_table_name,p_owner),upper(p_action)='EXECUTE');
 EXCEPTION
   when others then
-    if sqlcode != -4043 or not p_force then   -- not found
-      raise;
+    if sqlcode = -4043 then
+      logger('INFO: Package was not found');
+    else
+      if sqlcode != -4043 or not p_force then   -- not found
+        raise;
+      end if;
     end if;
 END;
 
@@ -1057,11 +1092,15 @@ BEGIN
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
   
-  do_sql('drop trigger '||case when g_trigger_in_audit_schema then g_aud_schema else upper(p_owner) end||'.'||audit_trigger_name(p_table_name),upper(p_action)='EXECUTE');
+  do_sql('drop trigger '||case when g_trigger_in_audit_schema then g_aud_schema else upper(p_owner) end||'.'||audit_trigger_name(p_table_name,p_owner),upper(p_action)='EXECUTE');
 EXCEPTION
   when others then
-    if sqlcode != -4080 or not p_force then   -- not found
-      raise;
+    if sqlcode = -4080 then
+      logger('INFO: Trigger was not found');
+    else
+      if sqlcode != -4080 or not p_force then   -- not found
+        raise;
+      end if;
     end if;
 END;
 

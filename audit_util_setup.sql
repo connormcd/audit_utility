@@ -146,6 +146,8 @@ package body &&schema..audit_pkg is
   
   l_headers t_audit_rows;
 
+  g_bulk_bind_limit constant int := 500;
+
   procedure bulk_init is
   begin
     l_headers.delete;
@@ -153,12 +155,8 @@ package body &&schema..audit_pkg is
   
   procedure bulk_process is
   begin
-    if l_headers.count = 1 then
-      insert into audit_header values l_headers(1);
-    else
-      forall i in 1 .. l_headers.count
-        insert into audit_header values l_headers(i);
-    end if;
+    forall i in 1 .. l_headers.count
+      insert into audit_header values l_headers(i);
     bulk_init;
   end;
   
@@ -170,6 +168,11 @@ package body &&schema..audit_pkg is
         p_al_id       out number) is
     l_idx pls_integer := l_headers.count+1;  
   begin
+    if l_idx > g_bulk_bind_limit then
+      bulk_process;
+      l_idx := 1;
+    end if;
+  
     l_headers(l_idx).aud$tstamp := systimestamp;
     l_headers(l_idx).aud$id     := seq_al_id.nextval;
     l_headers(l_idx).table_name := p_table_name;
@@ -232,6 +235,13 @@ end;
 -- or perhaps adding some sort of authentication etc to ensure people don't go around selectively
 -- turning off the audit.
 --
+
+--
+-- You can do this with a package or with a context, and you control this with the g_use_context 
+-- variable in the package body
+--
+create context TRIGGER_CTL using &&schema..TRIGGER_CTL;
+
 create or replace
 package &&schema..trigger_ctl is
   procedure maintenance_on(p_trigger varchar2);
@@ -256,13 +266,16 @@ package body &&schema..trigger_ctl is
     if t.count > 200000 then
        raise_application_error(-20000,'This looks like an attempt to destroy your PGA');
     end if;
-    t(p_trigger) := 1;
+    t(upper(p_trigger)) := 1;
+    
+    dbms_session.set_context('TRIGGER_CTL',upper(p_trigger),'Y');
   end;
   
   procedure maintenance_off(p_trigger varchar2) is
   begin
     if t.exists(p_trigger) then
        t.delete(p_trigger);
+       dbms_session.set_context('TRIGGER_CTL',upper(p_trigger),'');
     end if;
   end;
   
