@@ -21,7 +21,7 @@ IS
   
   -- by default, just updates/deletes
   --
-  g_inserts_audited constant boolean       := false;  
+  g_inserts_audited constant boolean       := true;  
   
   -- sometimes an update is really a logical deleted. If you set a column
   -- named as per below to 'Y', we'll audit it as a logical delete, not an update
@@ -136,7 +136,8 @@ begin
   select count(*)
   into   l_dup_cnt
   from   dba_tables
-  where  table_name = upper(p_table_name);
+  where  table_name = upper(p_table_name)
+  and    owner != g_aud_schema;
 
   return l_dup_cnt;
 end;
@@ -181,11 +182,11 @@ end;
 --
 function audit_trigger_name(p_table_name varchar2, p_owner varchar2) return varchar2 is
 begin
-  if dup_cnt(p_table_name,p_owner) = 1 then
-    return 'AUD$'||upper(substr(p_table_name,1,120));
-  else
+--  if dup_cnt(p_table_name,p_owner) = 1 then
+--    return 'AUD$'||upper(substr(p_table_name,1,120));
+--  else
     return 'AUD$'||upper(substr(p_table_name,1,90))||'_'||upper(p_owner);
-  end if;
+--  end if;
 end;
 
 --
@@ -395,16 +396,29 @@ begin
      -- new columns
      --
      if cols.aud_data_type is null then
-       if regexp_replace(cols.data_type,'\(.*\)') in ('CLOB','DATE','TIMESTAMP','ROWID','BLOB','LONG','INTERVAL DAY','INTERVAL YEAR') then
+       if regexp_replace(cols.data_type,'\(.*\)') in ('CLOB','NCLOB','DATE','TIMESTAMP','ROWID',
+                                                      'BLOB','INTERVAL DAY','INTERVAL YEAR TO MONTH',
+                                                      'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE') 
+       then
            col_clause := 'add '||cols.column_name||' '||cols.data_type;
-       elsif cols.data_type in ('RAW','CHAR','VARCHAR2') then
+       elsif cols.data_type in ('RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2') then
            col_clause := 'add '||cols.column_name||' '||cols.data_type||'('||cols.data_length||')';
        elsif (cols.data_type in ('NUMBER') and cols.data_precision is not null) then
            col_clause := 'add '||cols.column_name||' '||cols.data_type||'('||cols.data_precision||','||cols.data_scale||')';
-       elsif (cols.data_type in ('NUMBER') and cols.data_precision is null) then
+       elsif cols.data_type in ('FLOAT') then
+           if cols.data_precision < 126 then
+             col_clause := 'add '||cols.column_name||' '||cols.data_type||'('||cols.data_precision||')';
+           else
+             col_clause := 'add '||cols.column_name||' '||cols.data_type;
+           end if;
+       elsif (cols.data_type in ('NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') and cols.data_precision is null) then
            col_clause := 'add '||cols.column_name||' '||cols.data_type;
        elsif cols.data_type_owner is not null  then
-           col_clause := 'add '||cols.column_name||' '||cols.data_type_owner||'.'||cols.data_type;
+           if cols.data_type_owner = 'PUBLIC' then
+             col_clause := 'add '||cols.column_name||' '||cols.data_type;
+           else
+             col_clause := 'add '||cols.column_name||' '||cols.data_type_owner||'.'||cols.data_type;
+           end if;
        else
          die('Spat the dummy with data type '||cols.data_type||' for '||cols.column_name);
        end if;
@@ -957,9 +971,9 @@ BEGIN
     end if;
     
     bld('     '||lower(g_aud_schema||'.'||audit_package_name(p_table_name,p_owner))||'.audit_row(');
-    bld('         p_aud$tstamp'||lpad('=>',cols(1).maxlen-6)||'l_tstamp');
-    bld('        ,p_aud$id    '||lpad('=>',cols(1).maxlen-6)||'l_id');
-    bld('        ,p_aud$image '||lpad('=>',cols(1).maxlen-6)||'''NEW''');
+    bld('         p_aud$tstamp'||lpad('=>',greatest(cols(1).maxlen-6,3))||'l_tstamp');
+    bld('        ,p_aud$id    '||lpad('=>',greatest(cols(1).maxlen-6,3))||'l_id');
+    bld('        ,p_aud$image '||lpad('=>',greatest(cols(1).maxlen-6,3))||'''NEW''');
     add_cols('new');
     bld('  end if;');
   end if;
