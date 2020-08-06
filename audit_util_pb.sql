@@ -21,7 +21,7 @@ IS
   
   -- by default, just updates/deletes
   --
-  g_inserts_audited constant boolean       := true;  
+  g_inserts_audited constant boolean       := false;  
   
   -- sometimes an update is really a logical deleted. If you set a column
   -- named as per below to 'Y', we'll audit it as a logical delete, not an update
