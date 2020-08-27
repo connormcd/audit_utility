@@ -1350,10 +1350,11 @@ BEGIN
               where aud_data_type is null
               or ( data_type like 'TIMESTAMP%' and data_scale != aud_data_scale )
               or ( data_type like 'VARCHAR%' and data_length != aud_data_length )
-              or ( data_type like 'NUMBER' and nvl(data_precision,-1)  != nvl(aud_data_precision,-1) )
-              or ( data_type like 'NUMBER' and nvl(data_scale,-1)  != nvl(aud_data_scale,-1) )
+              or ( data_type in ('NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') and nvl(data_precision,-1)  != nvl(aud_data_precision,-1) )
+              or ( data_type in ('NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') and nvl(data_scale,-1)  != nvl(aud_data_scale,-1) )
               or ( data_type like 'INTERVAL%' and nvl(data_precision,-1)  != nvl(aud_data_precision,-1) )
               or ( data_type like 'INTERVAL%' and nvl(data_scale,-1)  != nvl(data_scale,-1) )
+              or ( data_type in ('RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2') and data_length != aud_data_length )
               group by owner, table_name
   )
   loop

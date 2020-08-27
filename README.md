@@ -1125,7 +1125,11 @@ Just done a large application deployment? If you are worried you might have miss
 Accidents Happen
 ----------------
 
-As I mentioned in the video below, some times you need to turn off a trigger temporarily in a session. Disabling a trigger is a drastic way to achieve this because it breaks the application for any other session that is current using that table. So the audit routines respect that need, and you can control audit trigger facilities on a session by session basis using the TRIGGER_CTL package which will be loaded into the audit schema. Clearly, you might want to look at either not using this (if you want to force audit ALL the time) or perhaps adding some sort of authentication etc to ensure people don't go around selectively turning off the audit!
+Some times you need to turn off a trigger temporarily in a session. Disabling a trigger is a drastic way to achieve this because it breaks the application for any other session that is current using that table. So the audit routines respect that need, and you can control audit trigger facilities on a session by session basis using the TRIGGER_CTL package which will be loaded into the audit schema. Clearly, you might want to look at either not using this (if you want to force audit ALL the time) or perhaps adding some sort of authentication etc to ensure people don't go around selectively turning off the audit!
+
+Same Schema Support
+===================
+By default, the audit utility was designed to be operated by a DBA to "impose" auditing on a target schema. However, in some environment you might not have the privs to that, and thus you want all of the auditing placed into an existing schema to which you have access. In the "same_schema" folder, there is a set of scripts to faciliate that. It replaces all refernces to "DBA_" views with "ALL_", and all objects created that are associated with audit are prefixed with AUD$ to separate them out from the existing objects in the schema.
 
 Complete list of Settings
 =========================
