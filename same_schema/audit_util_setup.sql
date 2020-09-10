@@ -72,14 +72,14 @@ create table &&schema..&&prefix.AUDIT_HEADER
 (
   AUD$TSTAMP           TIMESTAMP(6) NOT NULL 
  ,AUD$ID               NUMBER(18)   NOT NULL 
- ,TABLE_NAME           VARCHAR2(30) NOT NULL 
+ ,TABLE_NAME           VARCHAR2(128) NOT NULL 
  ,DML                  VARCHAR2(1)  NOT NULL
  ,DESCR                VARCHAR2(100)
- ,ACTION               VARCHAR2(32)
+ ,ACTION               VARCHAR2(64)
  ,CLIENT_ID            VARCHAR2(64)
  ,HOST                 VARCHAR2(64)
- ,MODULE               VARCHAR2(48)
- ,OS_USER              VARCHAR2(32)
+ ,MODULE               VARCHAR2(64)
+ ,OS_USER              VARCHAR2(128)
 ) 
 --
 -- If you do not have a partitioning license, comment out these lines
