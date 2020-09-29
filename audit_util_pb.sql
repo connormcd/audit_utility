@@ -8,7 +8,7 @@ IS
 --
 -- global vars for new audit table support
 --
-  g_aud_schema      constant varchar2(10)  := upper('&&schema');
+  g_aud_schema      constant varchar2(30)  := upper('&&schema');
   g_aud_tspace      constant varchar2(30)  := '&&tspace';
   
   -- prefix for all audit table names
