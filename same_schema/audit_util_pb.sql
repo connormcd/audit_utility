@@ -608,11 +608,11 @@ BEGIN
   for i in 1 .. cols.count loop
      -- intervals are different...
      if (cols(i).data_type like 'INTERVAL DAY%') then
-        bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,28),cols(i).maxlen+2)||''||'dsinterval_unconstrained');
+        bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'dsinterval_unconstrained');
      elsif (cols(i).data_type like 'INTERVAL YEAR%') then
-        bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,28),cols(i).maxlen+2)||''||'yminterval_unconstrained');
+        bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'yminterval_unconstrained');
      else
-        bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,28),cols(i).maxlen+2)||''||lower(regexp_replace(cols(i).data_type,'\(.*\)')));
+        bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||lower(regexp_replace(cols(i).data_type,'\(.*\)')));
      end if;
   end loop;
 
@@ -710,7 +710,7 @@ BEGIN
     bld('    ,p_aud$image');
 
     for i in 1 .. cols.count loop
-      bld('    ,p_'||substr(lower(cols(i).column_name),1,28));
+      bld('    ,p_'||substr(lower(cols(i).column_name),1,110));
     end loop;
 
     bld('    );');
@@ -763,7 +763,7 @@ PROCEDURE generate_audit_trigger(p_owner varchar2
   procedure add_cols(p_new_or_old varchar2) is
   begin
     for i in 1 .. cols.count loop
-       bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,28),cols(i).maxlen+2)||'=>:'||p_new_or_old||'.'||lower(cols(i).column_name));
+       bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||'=>:'||p_new_or_old||'.'||lower(cols(i).column_name));
     end loop;
     bld('        );');
   end;
