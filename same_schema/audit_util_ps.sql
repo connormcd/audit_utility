@@ -1,6 +1,10 @@
 define schema = scott
 define prefix = aud$
 
+pro
+pro Using schema &&schema, prefix &&prefix
+pro
+
 CREATE OR REPLACE PACKAGE &&schema..&&prefix.AUDIT_UTIL IS
 
 -- ----------------------------------------------------------------------------

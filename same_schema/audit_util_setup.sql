@@ -7,12 +7,11 @@ pro If you're happy with this, press Enter to continue, otherwise Ctrl-C to abor
 pause
 
 define schema = scott
-define passwd = tiger
 define tspace = users
 define prefix = aud$
 
 pro
-pro Have you set the SCHEMA and TSPACE variables before running this?
+pro Have you set the SCHEMA and TSPACE variables IN ALL SCRIPTS before running this?
 pro If yes, press Enter to continue, otherwise Ctrl-C to abort
 pause
 

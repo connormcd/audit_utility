@@ -2,6 +2,11 @@ define schema = scott
 define tspace = users
 define prefix = aud$
 
+pro
+pro Using schema &&schema, prefix &&prefix, tablespace &&tspace
+pro
+
+
 CREATE OR REPLACE PACKAGE BODY &&schema..&&prefix.AUDIT_UTIL
 IS
 
