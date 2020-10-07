@@ -952,10 +952,16 @@ BEGIN
   bld('    end;');
 
   bld(' ');
-  if g_bulk_bind then      
-    bld('  '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header_bulk('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
-  else
-    bld('  '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+  if not g_inserts_audited then
+    bld('  if l_dml != ''I'' then ');
+  end if;
+    if g_bulk_bind then
+      bld('    '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header_bulk('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+    else
+      bld('    '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+    end if;
+  if not g_inserts_audited then
+    bld('  end if;');
   end if;
   bld(' ');
 
