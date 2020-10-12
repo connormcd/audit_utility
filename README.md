@@ -1139,6 +1139,8 @@ g_capture_new_updates - whether to log :NEW records as well as :OLD records. Def
 
 g_inserts_audited - whether to log inserts as well as updates and deletes. Defaults to false.
 
+g_always_log_header - whether to log a header record for inserts even if insert capture at table level is off. Default to false.
+
 g_job_name - the scheduler job name for partition name tidy up. Defaults to AUDIT_PARTITION_NAME_TIDY_UP
 
 g_log_level - The amount of logging we do. 1= dbms_output, 2=maint table, 3=both. Defaults to 3

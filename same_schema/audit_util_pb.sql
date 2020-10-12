@@ -29,6 +29,11 @@ IS
   --
   g_inserts_audited constant boolean       := false;  
   
+  --
+  -- even if inserts are off, do we keep the header
+  --
+  g_always_log_header constant boolean       := false; 
+  
   -- sometimes an update is really a logical deleted. If you set a column
   -- named as per below to 'Y', we'll audit it as a logical delete, not an update
   --
@@ -922,6 +927,7 @@ BEGIN
     if not g_use_context then
       bld(' if '||lower(g_aud_schema)||'.trigger_ctl.enabled('''||l_audit_trigger_name||''') then');
     end if;
+    bld('   '||lower(g_aud_schema)||'.&&prefix.audit_pkg.bulk_init;');
     bld('   '||lower(g_aud_schema||'.'||audit_package_name(p_table_name,p_owner))||'.bulk_init;');
     if not g_use_context then
       bld(' end if;');
@@ -952,15 +958,31 @@ BEGIN
   bld('    end;');
 
   bld(' ');
-  if g_bulk_bind then      
-    bld('  '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header_bulk('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+
+  if g_always_log_header then
+      if g_bulk_bind then      
+        bld('  '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header_bulk('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+      else
+        bld('  '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+      end if;
+      bld(' ');
   else
-    bld('  '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+      if g_inserts_audited then
+        bld('  if '||l_update_expr||'     inserting or '||chr(10)||'     deleting then ');
+      else 
+        bld('  if '||l_update_expr||'     deleting then ');
+      end if;
+
+      if g_bulk_bind then      
+        bld('    '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header_bulk('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+      else
+        bld('    '||lower(g_aud_schema)||'.&&prefix.audit_pkg.log_header('''||upper(p_table_name)||''',l_dml,l_descr,l_tstamp,l_id);');
+      end if;
+      bld('  end if;');
+      bld(' ');
   end if;
-  bld(' ');
 
   bld('  if '||l_update_expr||'     deleting then ');
-
   bld('     '||lower(g_aud_schema||'.'||audit_package_name(p_table_name,p_owner))||'.audit_row(');
   bld('         p_aud$tstamp'||lpad('=>',greatest(cols(1).maxlen-6,3))||'l_tstamp');
   bld('        ,p_aud$id    '||lpad('=>',greatest(cols(1).maxlen-6,3))||'l_id');
