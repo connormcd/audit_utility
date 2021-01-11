@@ -417,7 +417,8 @@ begin
              col_clause := 'add '||cols.column_name||' '||cols.data_type;
            end if;
        elsif (cols.data_type in ('NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') and cols.data_precision is null) then
-           col_clause := 'add '||cols.column_name||' '||cols.data_type;
+           col_clause := 'add '||cols.column_name||' '||cols.data_type||
+                         case when cols.data_scale is not null then '(*,'||cols.data_scale||')' end;
        elsif cols.data_type_owner is not null  then
            if cols.data_type_owner = 'PUBLIC' then
              col_clause := 'add '||cols.column_name||' '||cols.data_type;
