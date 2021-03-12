@@ -512,6 +512,48 @@ begin
 
 end;
 
+--
+-- that small set of column names that can be used without quotes in SQL
+-- but must be quoted in PLSQL
+--
+function quote_special_col(p_col varchar2) return varchar2 is
+  l_col varchar2(128) := upper(p_col);
+  l_special_cols sys.odcivarchar2list := 
+    sys.odcivarchar2list(
+           'AT'
+          ,'BEGIN'
+          ,'CASE'
+          ,'CLUSTERS'
+          ,'COLAUTH'
+          ,'COLUMNS'
+          ,'CRASH'
+          ,'CURSOR'
+          ,'DECLARE'
+          ,'END'
+          ,'EXCEPTION'
+          ,'FETCH'
+          ,'FUNCTION'
+          ,'GOTO'
+          ,'IF'
+          ,'INDEXES'
+          ,'OVERLAPS'
+          ,'PROCEDURE'
+          ,'SQL'
+          ,'SUBTYPE'
+          ,'TABAUTH'
+          ,'TYPE'
+          ,'VIEWS'
+          ,'WHEN');
+
+begin
+  for i in 1 ..  l_special_cols.count 
+  loop
+    if l_col = l_special_cols(i) then
+      return '"'||l_col||'"';
+    end if;
+  end loop;
+  return p_col;
+end;
 
 -- =========================================================================
 --
@@ -702,7 +744,7 @@ BEGIN
     bld('    l_audrows(l_idx).aud$image  := p_aud$image;');
 
     for i in 1 .. cols.count loop
-      bld('    l_audrows(l_idx).'||rpad(lower(cols(i).column_name),cols(i).maxlen+2)||' := p_'||lower(cols(i).column_name)||';');
+      bld('    l_audrows(l_idx).'||rpad(quote_special_col(lower(cols(i).column_name)),cols(i).maxlen+4)||' := p_'||lower(cols(i).column_name)||';');
     end loop;
 
   else
@@ -774,7 +816,7 @@ PROCEDURE generate_audit_trigger(p_owner varchar2
   procedure add_cols(p_new_or_old varchar2) is
   begin
     for i in 1 .. cols.count loop
-       bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||'=>:'||p_new_or_old||'.'||lower(cols(i).column_name));
+       bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||'=>:'||p_new_or_old||'.'||quote_special_col(lower(cols(i).column_name)));
     end loop;
     bld('        );');
   end;
@@ -874,7 +916,7 @@ BEGIN
     end if;
     l_update_expr := l_update_expr ||
          case when l_update_expr is not null then '     ' end ||
-         rpad('updating('''||l_col_name||''') ',cols(1).maxlen+12)||' or '||chr(10);
+         rpad('updating('''||quote_special_col(l_col_name)||''') ',cols(1).maxlen+15)||' or '||chr(10);
     l_update_cols := substr(l_update_cols,instr( l_update_cols,',')+1);
   end loop;
 

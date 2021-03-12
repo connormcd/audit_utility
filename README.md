@@ -5,7 +5,7 @@ Installation
 ============
     @audit_util_setup.sql
     @audit_util_ps.sql
-    @audit_utl_pb.sql
+    @audit_util_pb.sql
 
 Ensure you edit each file to nominate the schema and tablespace you want to use. Needs to be run as DBA (naturally).
 
@@ -1126,6 +1126,10 @@ Accidents Happen
 ----------------
 
 Some times you need to turn off a trigger temporarily in a session. Disabling a trigger is a drastic way to achieve this because it breaks the application for any other session that is current using that table. So the audit routines respect that need, and you can control audit trigger facilities on a session by session basis using the TRIGGER_CTL package which will be loaded into the audit schema. Clearly, you might want to look at either not using this (if you want to force audit ALL the time) or perhaps adding some sort of authentication etc to ensure people don't go around selectively turning off the audit!
+
+Caveats
+-------------------
+I am from the old school of "pick column names that make life easy for you".  If you have embraced lower case, mixed case, camel case or anything that would typically require quotes around the names of the table, column etc in your code, then this routine is not for you :-) You might see quotes in the generated code, because there are a few column names that are allowed without quotes but are still PL/SQL reserved words, but you would need to be unlucky to stumble onto this. Check my blog connor-mcdonald.com for details on this
 
 Same Schema Support
 ===================
