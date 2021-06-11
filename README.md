@@ -1159,6 +1159,8 @@ g_bulk_bind - Whether the audit processing uses bulk bind or row-by-row processi
 
 g_use_context - should we use a context/WHEN clause or a plsql call for trigger maintenance. Defaults to true
 
+g_audit_lobs_on_update_always - should we capture the contents of LOBs if they are not changed on update. Defaults to false.
+
 Your Usage Rights
 =================
 Whilst I've done plenty of testing, responsibilty for correctness on your own environment lies with you. There are boundary cases where you could break it. For example, throw in some 120 character table names combined column names and you might have problems. Similarly, the routines have no handling for mixed case dictionary names - you're on your own there. Having said that, I have no interest in licensing the code etc, so you are free to use, copy, modify etc with no implied ownership of my own, or any attribution required. If you get some value out of it, just pop a "Thanks" on Twitter to @connor_mc_d and that's cool.

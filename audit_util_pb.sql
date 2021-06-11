@@ -62,6 +62,11 @@ IS
   -- should we use a context/WHEN clause or a plsql call for trigger maintenance
   --
   g_use_context constant boolean := true;
+
+  --
+  -- should we log CLOB/BLOB if unchanged in an update
+  --
+  g_audit_lobs_on_update_always constant boolean := false;
   
 --
 -- NOTE: In terms of other naming conventions, check the routines
@@ -464,8 +469,8 @@ begin
            -- with precision and scale.  We'll just work with precision and see what happens when
            -- we try to alter the table
            --
-           if nvl(cols.data_precision,-1) = nvl(cols.aud_data_precision,-1) and
-              nvl(cols.data_scale,-1) = nvl(cols.aud_data_scale,-1) then
+           if nvl(cols.data_precision,0) = nvl(cols.aud_data_precision,0) and
+              nvl(cols.data_scale,0) = nvl(cols.aud_data_scale,0) then
               null; -- no change
            elsif cols.data_precision > cols.aud_data_precision then
               col_clause := 'modify '||cols.column_name||' '||cols.data_type||'('||cols.data_precision||','||cols.data_scale||')';
@@ -808,9 +813,29 @@ PROCEDURE generate_audit_trigger(p_owner varchar2
   end;
 
   procedure add_cols(p_new_or_old varchar2) is
+    l_col_name varchar2(255);
   begin
     for i in 1 .. cols.count loop
-       bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||'=>:'||p_new_or_old||'.'||quote_special_col(lower(cols(i).column_name)));
+       l_col_name := quote_special_col(lower(cols(i).column_name));
+       --
+       -- no special handling for LOBs if you want to log them always
+       --
+       if g_audit_lobs_on_update_always then
+         bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||'=>:'||p_new_or_old||'.'||l_col_name);
+       else
+       --
+       -- otherwise, for LOBs we might pass in null when relevant
+       --
+         if cols(i).data_type in ('CLOB','BLOB') then
+           bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||
+                  '=>'||case 
+                          when p_new_or_old = 'new' then 'case when inserting or ( updating and dbms_lob.compare(:old.'||l_col_name||',:new.'||l_col_name||') != 0 ) then :new.'||l_col_name||' end'         
+                          when p_new_or_old = 'old' then 'case when deleting or ( updating and dbms_lob.compare(:old.'||l_col_name||',:new.'||l_col_name||') != 0 ) then :old.'||l_col_name||' end'         
+                        end);
+         else
+           bld('        ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||'=>:'||p_new_or_old||'.'||l_col_name);
+         end if;
+       end if;
     end loop;
     bld('        );');
   end;
