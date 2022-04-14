@@ -7,7 +7,7 @@ Installation
     @audit_util_ps.sql
     @audit_util_pb.sql
 
-Ensure you edit each file to nominate the schema and tablespace you want to use. Needs to be run as DBA (naturally).
+Ensure you edit each file to nominate the schema and tablespace you want to use. Needs to be run as SYSDBA or a PDB_DBA on autonomous. The script will check before proceeeding.
 
 Functionality
 ================
@@ -1034,7 +1034,7 @@ There may be some columns in your source table for which an update does constitu
 
 
 
-When you create a trigger in this way, the nominated columns are stored in the AUDIT_UTIL_UPDATE_TRIG table. In this way, if you generate the trigger again, the same column specification is retained. If you need to reset the columns that are captured, you pass the string 'NULL' for the p_update_cols parameter (because a true null just means use the existing column specification.
+When you create a trigger in this way, the nominated columns are stored in the AUDIT_UTIL_UPDATE_TRIG table. In this way, if you generate the trigger again, the same column specification is retained. If you need to reset the columns that are captured, you pass the string 'NULL' for the p_update_cols parameter (because a true null just means use the existing column specification).
 
 Selective Row Audit
 -------------------

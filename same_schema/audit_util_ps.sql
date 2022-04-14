@@ -24,7 +24,7 @@ PROCEDURE grant_audit_access(p_object_name varchar2
                             ,p_action varchar2);
 
 --
--- Create (or modify) the audit table for an IMS table.
+-- Create (or modify) the audit table for a  table.
 -- The routine sends back two booleans indicating if any work
 -- was needed to either create a new table, or alter it to add
 -- any columns.  You can (at your discretion) use these values

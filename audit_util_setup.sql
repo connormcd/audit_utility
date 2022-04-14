@@ -2,7 +2,29 @@ define schema = aud_util
 define tspace = users
 
 pro
-pro Have you set the SCHEMA and TSPACE variables before running this?
+pro Doing some preliminary checks
+pro
+whenever sqlerror exit
+set feedback off
+begin
+  if user != 'SYS' and SYS_CONTEXT('SYS_SESSION_ROLES', 'PDB_DBA') = 'FALSE' then
+     raise_application_error(-20000,'You must be SYSDBA or a PDB_DBA to run this script');
+  end if;
+  
+  if sys_context('USERENV','CON_ID') = '1' then
+     raise_application_error(-20000,'Auditing is not intended for the root of a container database');
+  end if;
+end;
+/
+set feedback on
+whenever sqlerror continue
+
+pro
+pro IMPORTANT: 
+pro Have you set the SCHEMA and TSPACE variables in this script AND 
+pro the two child scripts (audit_util_ps/audit_util_pb)? If you have not
+pro then things are not going to go well
+pro
 pro If yes, press Enter to continue, otherwise Ctrl-C to abort
 pause
 
@@ -21,8 +43,16 @@ drop user &&schema cascade;
 create user &&schema no authentication default tablespace &&tspace;
 
 alter user &&schema quota unlimited on &&tspace;
+
+grant select on dba_tables to &&schema;
+grant select on dba_constraints to &&schema;
+grant select on dba_tab_columns to &&schema;
+grant select on dba_part_tables to &&schema;
+grant select on dba_tab_partitions to &&schema;
+grant select on dba_tab_cols to &&schema;
+grant select on dba_objects to &&schema;
+
 grant 
-  select any dictionary, 
   select any table,
   create table,
   create any trigger,
@@ -230,7 +260,8 @@ end;
 
 --
 -- Ability to selectively disable a trigger within a session if you have data maintenance needs
--- Avoids the need to take an outage just because you want to not have the trigger fire.
+-- avoids the need to take an outage just because you want to not have the trigger fire.
+--
 -- Clearly, you might want to look at either not using this (if you want to force audit ALL the time)
 -- or perhaps adding some sort of authentication etc to ensure people don't go around selectively
 -- turning off the audit.
@@ -296,6 +327,12 @@ set echo off
 
 set lines 120
 col object_name format a40
+
+pro
+pro Listing obects and their status in &&schema schema
+pro
+pro Anything not VALID indicates an installation failure
+pro
 
 select object_name, object_type, status
 from dba_objects

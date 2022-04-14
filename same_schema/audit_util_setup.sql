@@ -1,7 +1,8 @@
 pro
 pro This set of scripts for installing the audit package into an EXISTING schema
 pro that does not have all the DBA level privs that the standard audit scripts
-pro would use.  
+pro would use. Note that you STILL need some DBA level privs to install the
+pro audit facility, because we are granting some privs to the target user
 pro
 pro If you're happy with this, press Enter to continue, otherwise Ctrl-C to abort
 pause
@@ -11,7 +12,25 @@ define tspace = users
 define prefix = aud$
 
 pro
-pro Have you set the SCHEMA and TSPACE variables IN ALL SCRIPTS before running this?
+pro Doing some preliminary checks
+pro
+whenever sqlerror exit
+set feedback off
+begin
+  if SYS_CONTEXT('SYS_SESSION_ROLES', 'DBA') = 'FALSE' and SYS_CONTEXT('SYS_SESSION_ROLES', 'PDB_DBA') = 'FALSE' then
+     raise_application_error(-20000,'You must be DBA or a PDB_DBA to run this script');
+  end if;
+end;
+/
+set feedback on
+whenever sqlerror continue
+
+pro
+pro IMPORTANT: 
+pro Have you set the SCHEMA and TSPACE variables in this script AND 
+pro the two child scripts (audit_util_ps/audit_util_pb)? If you have not
+pro then things are not going to go well
+pro
 pro If yes, press Enter to continue, otherwise Ctrl-C to abort
 pause
 
