@@ -19,7 +19,7 @@ In version 1, the various audit generation options were burnt into the code, so 
      USE_CONTEXT                            VARCHAR2(1)
      AUDIT_LOBS_ON_UPDATE_ALWAYS            VARCHAR2(1)
 
-The default settings for the entire installation are stored in a special row in this table, with a table name of '**DEFAULT**'. This is created when you run the upgrade script.
+The default settings for the entire installation are stored in a special row in this table, with a table name of '\*\*DEFAULT\*\*'. This is created when you run the upgrade script.
 
 Installation/Upgrade
 ====================
@@ -121,6 +121,7 @@ Additionally, there is one new API to set the system-wide defaults:
 
 which has the same usage semantics, namely Y or N to set a value, the string NULL to clear UPDATE_COLS or WHEN_CLAUSE, and null to leave a setting unchanged. Changing the defaults does not alter the auditing for any existing tables but if you re-generate audit support AND those tables were using defaults, then they will pick up the new settings.
 
+*Same schema support coming soon*
 
 Your Usage Rights
 =================
