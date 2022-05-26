@@ -42,6 +42,11 @@ set echo on
 set echo off
 
 pro
+pro Updating main audit package
+pro
+@@audit_pkg.sql
+
+pro
 pro  Examinging existing installed package to obtain defaults for the
 pro  various global variables (that now become entries in AUDIT_UTIL_SETTINGS)
 pro
