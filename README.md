@@ -1,6 +1,6 @@
 Audit trigger/package generator for Oracle tables
 
-Note: I recommend you drop into the V2 folder and use the updated audit utility. It contains all the current audit facilities plus more. This old version will be retired at some stage.
+**Note: I recommend you drop into the V2 folder and use the updated audit utility. It contains all the current audit facilities plus more. This old version will be retired at some stage.**
 
 Installation
 ============
