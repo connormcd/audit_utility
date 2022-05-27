@@ -738,8 +738,36 @@ BEGIN
         bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||lower(regexp_replace(cols(i).data_type,'\(.*\)')));
      end if;
   end loop;
-
   bld('  );');
+
+  bld(' ');
+  bld('  function show_history(');
+  bld('     p_aud$tstamp_from  timestamp default localtimestamp - numtodsinterval(7,''DAY'')');
+  bld('    ,p_aud$tstamp_to    timestamp default localtimestamp');
+  bld('    ,p_aud$id           number    default null');
+  bld('    ,p_aud$image        varchar2  default null');
+  for i in 1 .. cols.count loop
+    --
+    -- we'll allow parameters for the basic scalar types
+    --
+    if regexp_replace(cols(i).data_type,'\(.*\)') in ('DATE','TIMESTAMP','ROWID',
+                                                      'INTERVAL DAY','INTERVAL YEAR TO MONTH',
+                                                      'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE',
+                                                      'RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2',
+                                                      'NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') 
+    then
+       -- intervals are different...
+       if (cols(i).data_type like 'INTERVAL DAY%') then
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'dsinterval_unconstrained default null');
+       elsif (cols(i).data_type like 'INTERVAL YEAR%') then
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'yminterval_unconstrained default null');
+       else
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),16)||' default null');
+       end if;
+    end if;
+  end loop;
+
+  bld('  ) return clob;');
   bld('end;');
   do_sql(l_ddl,upper(p_action)='EXECUTE');
 
@@ -809,9 +837,9 @@ BEGIN
     bld('      l_idx := 1;');
     bld('    end if;');
     bld(' ');
-    bld('    l_audrows(l_idx).aud$tstamp := p_aud$tstamp;');
-    bld('    l_audrows(l_idx).aud$id     := p_aud$id;');
-    bld('    l_audrows(l_idx).aud$image  := p_aud$image;');
+    bld('    l_audrows(l_idx).aud$tstamp   := p_aud$tstamp;');
+    bld('    l_audrows(l_idx).aud$id       := p_aud$id;');
+    bld('    l_audrows(l_idx).aud$image    := p_aud$image;');
 
     for i in 1 .. cols.count loop
       bld('    l_audrows(l_idx).'||rpad(quote_special_col(lower(cols(i).column_name)),cols(i).maxlen+4)||' := p_'||lower(cols(i).column_name)||';');
@@ -838,8 +866,180 @@ BEGIN
 
     bld('    );');
   end if;
-  
   bld('  end;');
+  bld('');
+
+  bld('  function show_history(');
+  bld('     p_aud$tstamp_from  timestamp default localtimestamp - numtodsinterval(7,''DAY'')');
+  bld('    ,p_aud$tstamp_to    timestamp default localtimestamp');
+  bld('    ,p_aud$id           number    default null');
+  bld('    ,p_aud$image        varchar2  default null');
+
+  for i in 1 .. cols.count loop
+    --
+    -- we'll allow parameters for the basic scalar types
+    --
+    if regexp_replace(cols(i).data_type,'\(.*\)') in ('DATE','TIMESTAMP','ROWID',
+                                                      'INTERVAL DAY','INTERVAL YEAR TO MONTH',
+                                                      'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE',
+                                                      'RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2',
+                                                      'NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') 
+    then
+       -- intervals are different...
+       if (cols(i).data_type like 'INTERVAL DAY%') then
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'dsinterval_unconstrained default null');
+       elsif (cols(i).data_type like 'INTERVAL YEAR%') then
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'yminterval_unconstrained default null');
+       else
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),16)||' default null');
+       end if;
+    end if;
+  end loop;
+
+  bld('  ) return clob is');    
+  bld('    l_output clob;');
+  bld('    l_idx    int := 0;');
+  bld(q'~    qt varchar2(1) := '"';~');
+  bld('  begin');
+  bld('    dbms_lob.createtemporary(l_output,true);');
+  bld('  --');
+  bld('  -- We are doing first principles building of JSON here, because that way we can still cater to older versions of Oracle');
+  bld('  -- Once 19c becomes the defacto Oracle version, we can move to JSON_OBJECT and the like to streamline this code');
+  bld('  --');
+  bld(q'~    l_output := '{"audit" : [';~');
+  bld(' ');
+  bld('    for i in ( ');
+  bld('      select ');
+  bld('         aud$tstamp');
+  bld('        ,aud$id');
+  bld('        ,table_name');
+  bld('        ,dml');
+  bld(q'~        ,replace(replace(replace(replace(replace(replace(descr,'\','\\'), chr(8), '\b'), chr(9), '\t'), chr(10), '\n'), chr(12), '\f'), chr(13), '\r') descr~');
+  bld(q'~        ,replace(replace(replace(replace(replace(replace(action,'\','\\'), chr(8), '\b'), chr(9), '\t'), chr(10), '\n'), chr(12), '\f'), chr(13), '\r') action~');
+  bld(q'~        ,replace(replace(replace(replace(replace(replace(client_id,'\','\\'), chr(8), '\b'), chr(9), '\t'), chr(10), '\n'), chr(12), '\f'), chr(13), '\r') client_id~');
+  bld(q'~        ,replace(replace(replace(replace(replace(replace(host,'\','\\'), chr(8), '\b'), chr(9), '\t'), chr(10), '\n'), chr(12), '\f'), chr(13), '\r') host~');
+  bld(q'~        ,replace(replace(replace(replace(replace(replace(module,'\','\\'), chr(8), '\b'), chr(9), '\t'), chr(10), '\n'), chr(12), '\f'), chr(13), '\r') module~');
+  bld(q'~        ,replace(replace(replace(replace(replace(replace(os_user,'\','\\'), chr(8), '\b'), chr(9), '\t'), chr(10), '\n'), chr(12), '\f'), chr(13), '\r') os_user~');
+
+  for i in 1 .. cols.count loop
+    if regexp_replace(cols(i).data_type,'\(.*\)') in ('DATE','TIMESTAMP','ROWID',
+                                                      'INTERVAL DAY','INTERVAL YEAR TO MONTH',
+                                                      'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE',
+                                                      'RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2',
+                                                      'NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') 
+    then
+       if regexp_replace(cols(i).data_type,'\(.*\)') in ('CHAR','VARCHAR2','NCHAR','NVARCHAR2')
+       then
+         bld('        ,replace(replace(replace(replace(replace(replace('||lower(cols(i).column_name) ||q'~,'\','\\'), chr(8), '\b'), chr(9), '\t'), chr(10), '\n'), chr(12), '\f'), chr(13), '\r') ~'||lower(cols(i).column_name));
+       else
+         bld('        ,'||lower(cols(i).column_name));
+       end if;
+     end if;
+  end loop;
+
+  bld('      from ');
+  bld('      (');
+  bld(q'~        select  qt||to_char(h.aud$tstamp at time zone 'UTC','yyyy-mm-dd"T"hh24:mi:ss.ff"Z"')||qt aud$tstamp~');
+  bld('               ,to_char(h.aud$id) aud$id');
+  bld('               ,qt||h.table_name||qt table_name');
+  bld('               ,qt||h.dml||qt dml');
+  bld(q'~               ,nvl2(h.descr,qt||h.descr||qt,'null') descr~');
+  bld(q'~               ,nvl2(h.action,qt||h.action||qt,'null') action~');
+  bld(q'~               ,nvl2(h.client_id,qt||h.client_id||qt,'null') client_id~');
+  bld(q'~               ,nvl2(h.host,qt||h.host||qt,'null') host~');
+  bld(q'~               ,nvl2(h.module,qt||h.module||qt,'null') module~');
+  bld(q'~               ,nvl2(h.os_user,qt||h.os_user||qt,'null') os_user~');
+
+  for i in 1 .. cols.count loop
+    if regexp_replace(cols(i).data_type,'\(.*\)') in ('DATE','TIMESTAMP','ROWID',
+                                                      'INTERVAL DAY','INTERVAL YEAR TO MONTH',
+                                                      'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE',
+                                                      'RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2',
+                                                      'NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') 
+    then
+       if regexp_replace(cols(i).data_type,'\(.*\)') in ('NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') 
+       then
+         bld('               ,nvl2(c.'||lower(cols(i).column_name)||',to_char(c.'||lower(cols(i).column_name)||'),''null'') '||lower(cols(i).column_name));
+       elsif regexp_replace(cols(i).data_type,'\(.*\)') in ('CHAR','VARCHAR2','NCHAR','NVARCHAR2')or cols(i).data_type like 'INTERVAL%'
+       then
+         bld('               ,nvl2(c.'||lower(cols(i).column_name)||',qt||c.'||lower(cols(i).column_name)||'||qt,''null'') '||lower(cols(i).column_name));
+       elsif cols(i).data_type = 'DATE'
+       then
+         bld('               ,nvl2(c.'||lower(cols(i).column_name)||',qt||to_char(c.'||lower(cols(i).column_name)||q'~,'yyyy-mm-dd"T"hh24:mi:ss:"Z"')||qt,'null') ~'||lower(cols(i).column_name));
+       elsif regexp_replace(cols(i).data_type,'\(.*\)') in ( 'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE')
+       then
+         bld('               ,nvl2(c.'||lower(cols(i).column_name)||',qt||to_char(c.'||lower(cols(i).column_name)||q'~ at time zone 'UTC','yyyy-mm-dd"T"hh24:mi:ss.ff"Z"')||qt,'null') ~'||lower(cols(i).column_name));
+       elsif regexp_replace(cols(i).data_type,'\(.*\)') = 'TIMESTAMP'
+       then
+         bld('               ,nvl2(c.'||lower(cols(i).column_name)||',qt||to_char(c.'||lower(cols(i).column_name)||q'~ at time zone 'UTC','yyyy-mm-dd"T"hh24:mi:ss.ff"Z"')||qt,'null') ~'||lower(cols(i).column_name));
+       elsif regexp_replace(cols(i).data_type,'\(.*\)') = 'RAW'
+       then
+         bld('               ,nvl2(c.'||lower(cols(i).column_name)||',qt||utl_raw.cast_to_varchar2(c.'||lower(cols(i).column_name)||')||qt,''null'') '||lower(cols(i).column_name));
+       elsif regexp_replace(cols(i).data_type,'\(.*\)') = 'ROWID'
+       then
+         bld('               ,nvl2(c.'||lower(cols(i).column_name)||',qt||rowidtochar(c.'||lower(cols(i).column_name)||')||qt,''null'') '||lower(cols(i).column_name));
+       end if;
+     end if;
+  end loop;
+
+  bld('        from aud_util.audit_header h,');
+  bld('             aud_util.emp_scott c');
+  bld('        where h.aud$tstamp   = c.aud$tstamp');
+  bld('        and   h.aud$id       = c.aud$id');
+  bld('        and   h.aud$tstamp  >= p_aud$tstamp_from');
+  bld('        and   h.aud$tstamp  <= p_aud$tstamp_to');
+  bld('        and   ( h.aud$id     = p_aud$id or p_aud$id  is null )');
+  bld('        and   ( c.aud$image  = p_aud$image or p_aud$image  is null )');
+
+  for i in 1 .. cols.count loop
+    if regexp_replace(cols(i).data_type,'\(.*\)') in ('DATE','TIMESTAMP','ROWID',
+                                                      'INTERVAL DAY','INTERVAL YEAR TO MONTH',
+                                                      'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE',
+                                                      'RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2',
+                                                      'NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') 
+    then
+      bld('        and   ( c.'||lower(cols(i).column_name)||'    = p_'||lower(cols(i).column_name)||' or p_'||lower(cols(i).column_name)||'  is null )');
+    end if;
+  end loop;
+
+  bld('      )');
+  bld('   )');
+  bld('   loop');
+  bld('     l_idx := l_idx + 1;');
+  bld(q'~     if l_idx > 1 then l_output := l_output ||','; end if;~');
+  bld(q'~     l_output := l_output ||'{';~');
+  bld(' ');
+  bld(q'~     l_output := l_output ||'  "AUD$TSTAMP" : '||i.aud$tstamp||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "AUD$ID" : '||i.AUD$ID||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "TABLE_NAME" : '||i.TABLE_NAME||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "DML" : '||i.DML||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "DESCR" : '||i.DESCR||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "ACTION" : '||i.ACTION||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "CLIENT_ID" : '||i.CLIENT_ID||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "HOST" : '||i.HOST||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "MODULE" : '||i.MODULE||chr(10);~');
+  bld(q'~     l_output := l_output ||',  "OS_USER" : '||i.OS_USER||chr(10);~');
+
+  for i in 1 .. cols.count loop
+    if regexp_replace(cols(i).data_type,'\(.*\)') in ('DATE','TIMESTAMP','ROWID',
+                                                      'INTERVAL DAY','INTERVAL YEAR TO MONTH',
+                                                      'TIMESTAMP WITH TIME ZONE','TIMESTAMP WITH LOCAL TIME ZONE',
+                                                      'RAW','CHAR','VARCHAR2','NCHAR','NVARCHAR2',
+                                                      'NUMBER','BINARY_DOUBLE','BINARY_FLOAT','FLOAT') 
+    then
+      bld(replace(q'~     l_output := l_output ||',  "@@@" : '||i.@@@||chr(10);~','@@@',cols(i).column_name));
+    end if;
+  end loop;
+
+  bld('    ');
+  bld(q'~     l_output := l_output ||'}';~');
+  bld('   end loop;');
+  bld(' ');
+  bld(q'~    l_output := l_output || ']}';~');
+  bld('   return l_output;');
+  bld('  end;');
+
+  
   bld('');
   bld('end;');
   do_sql(l_ddl,upper(p_action)='EXECUTE');
