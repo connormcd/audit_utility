@@ -762,7 +762,7 @@ BEGIN
        elsif (cols(i).data_type like 'INTERVAL YEAR%') then
           bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'yminterval_unconstrained default null');
        else
-          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),16)||' default null');
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),26)||' default null');
        end if;
     end if;
   end loop;
@@ -891,7 +891,7 @@ BEGIN
        elsif (cols(i).data_type like 'INTERVAL YEAR%') then
           bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'yminterval_unconstrained default null');
        else
-          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),16)||' default null');
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),26)||' default null');
        end if;
     end if;
   end loop;
@@ -982,8 +982,8 @@ BEGIN
      end if;
   end loop;
 
-  bld('        from aud_util.audit_header h,');
-  bld('             aud_util.emp_scott c');
+  bld('        from '||g_aud_schema||'.audit_header h,');
+  bld('             '||g_aud_schema||'.'||audit_table_name(p_table_name,p_owner) ||' c');
   bld('        where h.aud$tstamp   = c.aud$tstamp');
   bld('        and   h.aud$id       = c.aud$id');
   bld('        and   h.aud$tstamp  >= p_aud$tstamp_from');
