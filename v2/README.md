@@ -21,6 +21,25 @@ In version 1, the various audit generation options were burnt into the code, so 
 
 The default settings for the entire installation are stored in a special row in this table, with a table name of '\*\*DEFAULT\*\*'. This is created when you run the upgrade script.
 
+Also new is a generic audit history query. In the generated package for each table, a new routine SHOW_HISTORY will be added, allowing you to get JSON representation of the audit information for a table for a given date range. For example, for typical SCOTT.EMP table, you'll get a routine like:
+
+     function show_history(
+        p_aud$tstamp_from  timestamp default localtimestamp - numtodsinterval(7,'DAY')
+       ,p_aud$tstamp_to    timestamp default localtimestamp
+       ,p_aud$id           number    default null
+       ,p_aud$image        varchar2  default null
+       ,p_empno            number    default null
+       ,p_ename            varchar2  default null
+       ,p_job              varchar2  default null
+       ,p_mgr              number    default null
+       ,p_hiredate         date      default null
+       ,p_sal              number    default null
+       ,p_comm             number    default null
+       ,p_deptno           number    default null
+     ) return clob;
+
+The clob returned is a JSON array of all audit entries captured for that table, including the metadata from AUDIT_HEADER for any predicates passed. Timestamps are converted to UTC.
+
 Installation/Upgrade
 ====================
 As before, ensure that you edit each file to nominate the schema and tablespace you want to use. Needs to be run as SYSDBA or a PDB_DBA on autonomous. The script will check before proceeeding.
