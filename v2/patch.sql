@@ -1,4 +1,10 @@
 define schema = 'AUD_UTIL'
+
+set echo off
+@@audit_util_ps.sql
+@@audit_util_pb.sql
+
+
 set echo on
 alter table &&schema..audit_util_settings add   base_owner                  varchar2(128);
 alter table &&schema..audit_util_settings add   base_table                  varchar2(128);
