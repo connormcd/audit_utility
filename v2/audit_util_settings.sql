@@ -14,6 +14,8 @@ create table &&schema..audit_util_settings (
   bulk_bind                   varchar2(1),
   use_context                 varchar2(1),
   audit_lobs_on_update_always varchar2(1),
+  base_owner                  varchar2(128),
+  base_table                  varchar2(128),
   constraint audit_util_settings_chk01  check (table_name = upper(table_name)),
   constraint audit_util_settings_chk02  check (update_cols=upper(update_cols)),
   constraint audit_util_settings_chk03  check (regexp_like(update_cols,'^(\w{1,90},){0,20}\w{1,90}$')),
@@ -29,12 +31,15 @@ create table &&schema..audit_util_settings (
   constraint audit_util_settings_chk12  check ( use_context in ('Y','N') ),
   constraint audit_util_settings_chk13  check ( audit_lobs_on_update_always in ('Y','N') ),
   --
+  constraint audit_util_settings_chk14  check (base_owner = upper(base_owner)),
+  constraint audit_util_settings_chk15  check (base_table = upper(base_table)),
+  --
   constraint audit_util_settings_pk primary key (table_name)
   )
   pctfree 2
 /
 
-
+create index &&schema..audit_util_settings_ix on &&schema..audit_util_settings ( base_owner,base_table);
 
 comment on table  &&schema..audit_util_settings is 'Allows custom settings for individual audit tables, table name of **DEFAULT** is for global defaults';
 comment on column &&schema..audit_util_settings.table_name  is 'Audit TABLE_NAME in data dictionary';
@@ -50,6 +55,8 @@ comment on column &&schema..audit_util_settings.bulk_bind                   is '
 comment on column &&schema..audit_util_settings.use_context                 is 'should we use a context/WHEN clause or a plsql call for trigger maintenance';
 comment on column &&schema..audit_util_settings.audit_lobs_on_update_always is 'should we log CLOB/BLOB if unchanged in an update';
 
+comment on column &&schema..audit_util_settings.base_owner  is 'Owner of the table on which audit was created';
+comment on column &&schema..audit_util_settings.base_table  is 'Table on which audit was created';
 
 grant select on &&schema..audit_util_settings to select_catalog_role
 /

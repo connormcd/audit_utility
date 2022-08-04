@@ -35,6 +35,8 @@ And for an upgrade from version 1 of the utility, run:
     
 The upgrade will attempt to find the existing code base to identify what defaults you used, and load them into AUDIT_UTIL_SETTINGS, and will also look for any existing audit tables in your audit schema, and load them into the AUDIT_UTIL_SETTINGS table as well. If you modified the audit_code package code on a table-by-table basis in the past, then you would need to explicitly call GENERATE_AUDIT_SUPPORT for each table, with the settings you want to store the correct settings.
 
+If you are getting errors about missing columns "base_table" or "base_owner", then please run the patch.sql script to bring things up to date.
+
 Functionality/Usage
 ===================
 All the existing functionality and API calls remain the same, and thus any scripts you already had in place should continue to work unchanged. See the root level README for all the details on the APIs and example usage.  Only the GENERATE_AUDIT_SUPPORT has been extended. An existing call works as before:

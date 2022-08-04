@@ -159,7 +159,7 @@ begin
     where  table_name = p_table_name;
   exception
     when no_data_found then
-      die('Table settings not found for '||p_table_name);
+      die('Table settings not found for audit table '||p_table_name);
   end;
   
   g_inserts_audited             := ( nvl(l_table_settings.inserts_audited,l_default_settings.inserts_audited) = 'Y' );
@@ -211,6 +211,7 @@ begin
   where  table_name = upper(p_table_name)
   and    owner != g_aud_schema;
 
+logger('p_table_name='||p_table_name);
   return l_dup_cnt;
 end;
 
@@ -229,7 +230,21 @@ end;
 -- single point for standard audit table name (typically same as <table>)
 --
 function audit_table_name(p_table_name varchar2, p_owner varchar2) return varchar2 is
+  l_existing varchar2(128);
 begin
+  begin
+    select table_name
+    into   l_existing
+    from   &&schema..audit_util_settings
+    where  base_owner = upper(p_owner)
+    and    base_table = upper(p_table_name);
+
+    return l_existing;
+  exception
+    when no_data_found then
+      null;
+  end;
+  
   if dup_cnt(p_table_name,p_owner) = 1 then
     return g_aud_prefix||upper(substr(p_table_name,1,128-nvl(length(g_aud_prefix),0)));
   else
@@ -241,7 +256,25 @@ end;
 -- single point for standard audit table name (typically "PKG_"<table>)
 --
 function audit_package_name(p_table_name varchar2, p_owner varchar2) return varchar2 is
+  l_existing varchar2(128);
 begin
+  begin
+    select table_name
+    into   l_existing
+    from   &&schema..audit_util_settings
+    where  base_owner = upper(p_owner)
+    and    base_table = upper(p_table_name);
+   
+    if l_existing like '%\_'||upper(p_owner) escape '\' then
+      return 'PKG_'||upper(substr(p_table_name,1,90))||'_'||upper(p_owner);
+    else
+      return 'PKG_'||upper(substr(p_table_name,1,120));
+    end if;
+  exception
+    when no_data_found then
+      null;
+  end;
+
   if dup_cnt(p_table_name,p_owner) = 1 then
     return 'PKG_'||upper(substr(p_table_name,1,120));
   else
@@ -254,18 +287,32 @@ end;
 --
 function audit_trigger_name(p_table_name varchar2, p_owner varchar2) return varchar2 is
 begin
---  if dup_cnt(p_table_name,p_owner) = 1 then
---    return 'AUD$'||upper(substr(p_table_name,1,120));
---  else
     return 'AUD$'||upper(substr(p_table_name,1,90))||'_'||upper(p_owner);
---  end if;
 end;
 
 --
 -- Return a shortened name for the table for use
 --
 function table_pk_name(p_table_name varchar2, p_owner varchar2) return varchar2 is
+  l_existing varchar2(128);
 begin
+  begin
+    select table_name
+    into   l_existing
+    from   &&schema..audit_util_settings
+    where  base_owner = upper(p_owner)
+    and    base_table = upper(p_table_name);
+    
+    if l_existing like '%\_'||upper(p_owner) escape '\' then
+      return g_aud_prefix||substr(upper(substr(p_table_name,1,120-nvl(length(g_aud_prefix),0)))||'_'||upper(p_owner),1,120);
+    else
+      return g_aud_prefix||upper(substr(p_table_name,1,125-nvl(length(g_aud_prefix),0)));
+    end if;
+  exception
+    when no_data_found then
+      null;
+  end;
+
   if dup_cnt(p_table_name,p_owner) = 1 then
     return g_aud_prefix||upper(substr(p_table_name,1,125-nvl(length(g_aud_prefix),0)));
   else
@@ -1408,6 +1455,7 @@ PROCEDURE generate_audit_support(p_owner                       varchar2
   l_created boolean;
   l_altered boolean;
   l_table_name varchar2(200) := audit_table_name(p_table_name,p_owner);
+  l_exists  int;
 BEGIN
   if nvl(upper(p_inserts_audited),'NULL')             not in ('Y','N','NULL') or
      nvl(upper(p_always_log_header),'NULL')           not in ('Y','N','NULL') or
@@ -1421,6 +1469,16 @@ BEGIN
     die('Valid values for the audit flags are strings Y, N, NULL or left null');
   end if;
 
+  select count(*)
+  into   l_exists
+  from   dba_tables
+  where  owner = upper(p_owner)
+  and    table_name = upper(p_table_name);
+  
+  if l_exists = 0 then
+    die('Table '||upper(p_owner)||'.'||upper(p_table_name)||' does not exist');
+  end if;
+
   begin
     insert into &&schema..audit_util_settings(
        table_name
@@ -1431,7 +1489,9 @@ BEGIN
       ,partitioning
       ,bulk_bind
       ,use_context
-      ,audit_lobs_on_update_always)
+      ,audit_lobs_on_update_always
+      ,base_owner
+      ,base_table)
     values 
     (  l_table_name
       ,replace(upper(p_inserts_audited),'NULL')
@@ -1442,6 +1502,8 @@ BEGIN
       ,replace(upper(p_bulk_bind),'NULL')
       ,replace(upper(p_use_context),'NULL')
       ,replace(upper(p_audit_lobs_on_update_always),'NULL')
+      ,upper(p_owner)
+      ,upper(p_table_name)
     );
   exception
     when dup_val_on_index then
@@ -1575,6 +1637,11 @@ BEGIN
   drop_audit_trigger(p_owner,p_table_name,p_force,p_action);
   drop_audit_package(p_owner,p_table_name,p_force,p_action);
   drop_audit_table(p_owner,p_table_name,p_force,p_action);
+  
+  delete from &&schema..audit_util_settings
+  where  base_owner = upper(p_owner)
+  and    base_table = upper(p_table_name);
+  commit;
 END;
 
 PROCEDURE partition_name_tidy_up(p_operation varchar2 default 'DEFAULT',
@@ -1900,6 +1967,55 @@ BEGIN
   logger('**NOTE**: Existing tables will only pick up these new defaults if audit support is regenerated');
 
 END;
+
+--
+-- Only for patching existing AUDIT_UTIL_SETTINGS
+--
+PROCEDURE fix_audit_settings(
+                        p_audit_table_name varchar2
+                       ,p_base_owner       varchar2
+                       ,p_base_table_name  varchar2) is
+  l_valid int;                       
+begin
+  select count(*)
+  into   l_valid
+  from    &&schema..schema_list 
+  where   schema_name = p_base_owner;
+  
+  if l_valid = 0 then
+    die('base owner not in SCHEMA_LIST');
+  end if;
+
+  select count(*)
+  into   l_valid
+  from   dba_tables
+  where  owner = upper(p_base_owner)
+  and    table_name = upper(p_base_table_name);
+  
+  if l_valid = 0 then
+    die('base owner/table does not exist as a table');
+  end if;
+
+  select count(*)
+  into   l_valid
+  from   &&schema..audit_util_settings
+  where  table_name = upper(p_audit_table_name);
+  
+  if l_valid = 0 then
+    die('audit table name not in AUDIT_UTIL_SETTINGS');
+  end if;
+
+  update &&schema..audit_util_settings
+  set    base_owner = upper(p_base_owner),
+         base_table = upper(p_base_table_name)
+  where  table_name = upper(p_audit_table_name);
+  
+  if sql%notfound then
+    die('Something just went very very wrong');
+  end if;
+  logger('Set owner/table for '||p_audit_table_name||' to '||upper(p_base_owner)||'.'||upper(p_base_table_name));
+  commit;
+end;
 
 
 END; -- package body

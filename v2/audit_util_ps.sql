@@ -166,6 +166,13 @@ PROCEDURE set_defaults(p_update_cols                 varchar2 default null
                       ,p_use_context                 varchar2 default null
                       ,p_audit_lobs_on_update_always varchar2 default null
                       );
+--
+-- Only for patching existing AUDIT_UTIL_SETTINGS
+--
+PROCEDURE fix_audit_settings(
+                        p_audit_table_name varchar2
+                       ,p_base_owner       varchar2
+                       ,p_base_table_name  varchar2);
 
 END;
 /

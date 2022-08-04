@@ -1,0 +1,211 @@
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.generate_audit_support(
+   'SCOTT',
+   'EMP',
+   p_update_cols                 =>'empno,sal',
+   p_when_clause                 =>'',
+   p_inserts_audited             =>'',
+   p_always_log_header           =>'',
+   p_capture_new_updates         =>'',
+   p_trigger_in_audit_schema     =>'',
+   p_partitioning                =>'',
+   p_bulk_bind                   =>'N',
+   p_use_context                 =>'N',
+   p_audit_lobs_on_update_always =>'',   
+--   p_Action=>'EXECUTE'
+   p_Action=>'OUTPUT'
+  );
+end;
+/
+
+select * from aud_util.audit_util_settings
+@pr
+
+
+delete from aud_util.audit_util_settings
+where table_name != '**DEFAULT**';
+commit;
+
+
+select msg from aud_util.maint_log
+order by maint_seq;
+
+
+
+
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.generate_audit_support(
+   'SCOTT',
+   'EMP',
+   p_update_cols                 =>'',
+   p_when_clause                 =>'',
+   p_inserts_audited             =>'',
+   p_always_log_header           =>'',
+   p_capture_new_updates         =>'',
+   p_trigger_in_audit_schema     =>'',
+   p_partitioning                =>'',
+   p_bulk_bind                   =>'',
+   p_use_context                 =>'',
+   p_audit_lobs_on_update_always =>'',   
+   p_Action=>'EXECUTE'
+--   p_Action=>'OUTPUT'
+  );
+end;
+/
+
+select * from aud_util.audit_util_settings
+@pr
+
+
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.generate_audit_support('SCOTT','EMP',
+   p_action=>'EXECUTE',
+   p_update_cols                 =>'',
+   p_when_clause                 =>'',
+   p_inserts_audited             =>'',
+   p_always_log_header           =>'',
+   p_capture_new_updates         =>'',
+   p_trigger_in_audit_schema     =>'',
+   p_partitioning                =>'',
+   p_bulk_bind                   =>'',
+   p_use_context                 =>'',
+   p_audit_lobs_on_update_always =>''
+  );
+end;
+/
+
+select * from aud_util.audit_util_settings
+@pr
+
+
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.generate_audit_support(
+   'SCOTT',
+   'EMP',
+   p_update_cols                 =>'',
+   p_when_clause                 =>'',
+   p_inserts_audited             =>'',
+   p_always_log_header           =>'',
+   p_capture_new_updates         =>'',
+   p_trigger_in_audit_schema     =>'',
+   p_partitioning                =>'',
+   p_bulk_bind                   =>'NULL',
+   p_use_context                 =>'',
+   p_audit_lobs_on_update_always =>'',   
+   p_Action=>'EXECUTE'
+--   p_Action=>'OUTPUT'
+  );
+end;
+/
+
+select * from aud_util.audit_util_settings
+@pr
+
+
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.set_defaults(
+   p_update_cols                 =>'',
+   p_when_clause                 =>'',
+   p_inserts_audited             =>'Y',
+   p_always_log_header           =>'',
+   p_capture_new_updates         =>'',
+   p_trigger_in_audit_schema     =>'',
+   p_partitioning                =>'',
+   p_bulk_bind                   =>'',
+   p_use_context                 =>'',
+   p_audit_lobs_on_update_always =>''
+  );
+end;
+/
+
+select * from aud_util.audit_util_settings
+@pr
+
+
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.set_defaults(
+   p_update_cols                 =>'',
+   p_when_clause                 =>'',
+   p_inserts_audited             =>'N',
+   p_always_log_header           =>'',
+   p_capture_new_updates         =>'',
+   p_trigger_in_audit_schema     =>'',
+   p_partitioning                =>'',
+   p_bulk_bind                   =>'',
+   p_use_context                 =>'',
+   p_audit_lobs_on_update_always =>''
+  );
+end;
+/
+
+select * from aud_util.audit_util_settings
+@pr
+
+
+
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.generate_audit_package(
+   'SCOTT',
+   'EMP',
+   p_Action=>'EXECUTE'
+--   p_Action=>'OUTPUT'
+  );
+end;
+/
+
+select * from dba_errors
+where owner = 'AUD_UTIL';
+
+select aud_util.PKG_EMP2_SCOTT.show_history from dual;
+
+
+
+clear screen
+set lines 200
+set serverout on format wra
+begin
+ aud_util.audit_util.generate_audit_support(
+   'SCOTT',
+   'EMP2',
+   p_update_cols                 =>'',
+   p_when_clause                 =>'',
+   p_inserts_audited             =>'',
+   p_always_log_header           =>'',
+   p_capture_new_updates         =>'',
+   p_trigger_in_audit_schema     =>'',
+   p_partitioning                =>'',
+   p_bulk_bind                   =>'',
+   p_use_context                 =>'',
+   p_audit_lobs_on_update_always =>'',   
+   p_Action=>'EXECUTE'
+--   p_Action=>'OUTPUT'
+  );
+end;
+/
+
+select * from aud_util.audit_util_settings
+@pr
+
+
+delete from scott.emp2 where rownum = 1;
