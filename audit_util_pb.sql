@@ -116,16 +116,14 @@ end;
 --
 -- execute some DDL, as well as output it
 --
-procedure do_sql(p_sql varchar2,p_execute boolean) is
-  l_sql varchar2(32767) := p_sql;
+procedure do_sql(p_sql clob,p_execute boolean) is
+  l_offset int := 1;
 begin
-  while instr(l_sql,chr(10)) > 0 loop
-    dbms_output.put_line(substr(l_sql,1,instr(l_sql,chr(10))-1));
-    l_sql := substr(l_sql,instr(l_sql,chr(10))+1);
-  end loop;
-  if l_sql is not null then
-    dbms_output.put_line(l_sql);
-  end if;
+  while dbms_lob.instr(p_sql, chr(10), l_offset, 1) > 0 loop   
+    dbms_output.put_line(dbms_lob.substr(p_sql, dbms_lob.instr(p_sql, chr(10), l_offset, 1)-1, l_offset));  
+    l_offset := dbms_lob.instr(p_sql, chr(10), l_offset, 1)+1;  
+  end loop;    
+  dbms_output.put_line(dbms_lob.substr(p_sql, dbms_lob.getlength(p_sql), l_offset)); 
 
   if p_execute then
     execute immediate p_sql;
@@ -614,7 +612,7 @@ PROCEDURE generate_audit_package(p_owner varchar2
   type col_list is table of col_defn%rowtype;
   cols col_list;
 
-  l_ddl   varchar2(32767);
+  l_ddl   clob;
 
   procedure bld(p_sql varchar2) is
   begin
