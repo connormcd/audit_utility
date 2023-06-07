@@ -111,6 +111,7 @@ IS
 --
 procedure logger(p_msg   varchar2
                 ,p_level number default g_log_level) is
+  pragma autonomous_transaction;                  
 begin
   dbms_application_info.set_client_info(p_msg);
   if bitand(p_level,1) = 1 then
@@ -120,9 +121,8 @@ begin
   if bitand(p_level,2) = 2 then
     insert into maint_log ( maint_seq, tstamp, msg )
     values (maint_seq.nextval, systimestamp, substr(p_msg,1,4000));
-    commit;
-
   end if;
+  commit;
 end;
 
 --
@@ -138,7 +138,10 @@ end;
 -- initialize the global variables in the package with whatever was passed into 
 -- from the outside call to 'generate_audit_support'
 --
-procedure init(p_table_name varchar2) is
+procedure init(p_table_name varchar2,
+               p_base_owner varchar2,
+               p_base_table varchar2,
+               p_create_if_missing boolean default false) is
   l_default_settings    &&schema..audit_util_settings%rowtype;  
   l_table_settings      &&schema..audit_util_settings%rowtype;  
 begin              
@@ -159,7 +162,29 @@ begin
     where  table_name = p_table_name;
   exception
     when no_data_found then
-      die('Table settings not found for audit table '||p_table_name);
+      if p_create_if_missing then 
+        --
+        -- we've never seen this table, so add it with defaults
+        --
+        insert into &&schema..audit_util_settings(
+           table_name
+          ,base_owner
+          ,base_table
+          )
+        values 
+        (  p_table_name
+          ,upper(p_base_owner)
+          ,upper(p_base_table)
+        );
+
+        select *
+        into   l_table_settings
+        from   &&schema..audit_util_settings
+        where  table_name = p_table_name;
+        
+      else
+        die('Table settings not found for audit table '||p_table_name);
+      end if;
   end;
   
   g_inserts_audited             := ( nvl(l_table_settings.inserts_audited,l_default_settings.inserts_audited) = 'Y' );
@@ -207,9 +232,10 @@ begin
   into   l_dup_cnt
   from   dba_tables
   where  table_name = upper(p_table_name)
-  and    owner != g_aud_schema;
+  and    owner != g_aud_schema
+  and    owner in ( select schema_name from &&schema..schema_list);
 
-logger('p_table_name='||p_table_name);
+  logger('p_table_name='||p_table_name||',dup_cnt='||l_dup_cnt);
   return l_dup_cnt;
 end;
 
@@ -243,7 +269,7 @@ begin
       null;
   end;
   
-  if dup_cnt(p_table_name,p_owner) = 1 then
+  if dup_cnt(p_table_name,p_owner) <= 1 then
     return g_aud_prefix||upper(substr(p_table_name,1,128-nvl(length(g_aud_prefix),0)));
   else
     return g_aud_prefix||substr(upper(substr(p_table_name,1,120-nvl(length(g_aud_prefix),0)))||'_'||upper(p_owner),1,120);
@@ -678,12 +704,15 @@ PROCEDURE generate_audit_table(p_owner varchar2
 BEGIN
   logger('Call to generate audit table for '||p_owner||'.'||p_table_name);
 
-  -- just in case someone called us directly
-  init(p_table_name=>audit_table_name(p_table_name,p_owner));
-  
   if not valid_schema(p_owner) then
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
+
+  -- just in case someone called us directly
+  init(p_table_name=>audit_table_name(p_table_name,p_owner),
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>true);
   
   initial_aud_tab_existence(p_owner,p_table_name,p_created,upper(p_action)='EXECUTE');
   add_new_cols(p_owner,p_table_name,p_altered,upper(p_action)='EXECUTE');
@@ -698,14 +727,26 @@ PROCEDURE generate_audit_table(p_owner varchar2
   l_created boolean;
   l_altered boolean;
 BEGIN
+  if not valid_schema(p_owner) then
+    die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
+  end if;
+
   -- just in case someone called us directly
-  init(p_table_name=>audit_table_name(p_table_name,p_owner));
+  init(p_table_name=>audit_table_name(p_table_name,p_owner),
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>true);
 
   generate_audit_table(p_owner
                       ,p_table_name
                       ,l_created
                       ,l_altered
                       ,p_action);
+                      
+  if upper(p_action) = 'OUTPUT' then
+    logger('Rolling back entry in AUDIT_UTIL_SETTINGS since action is OUTPUT');
+    rollback;
+  end if;
 END;
 
 
@@ -737,12 +778,15 @@ PROCEDURE generate_audit_package(p_owner varchar2
 BEGIN
   logger('Call to generate audit package for '||p_owner||'.'||p_table_name);
 
-  -- just in case someone called us directly
-  init(p_table_name=>audit_table_name(p_table_name,p_owner));
-
   if not valid_schema(p_owner) then
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
+
+  -- just in case someone called us directly
+  init(p_table_name=>audit_table_name(p_table_name,p_owner),
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>upper(p_action)='OUTPUT');
 
   open col_defn;
   fetch col_defn
@@ -807,7 +851,7 @@ BEGIN
        elsif (cols(i).data_type like 'INTERVAL YEAR%') then
           bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'yminterval_unconstrained default null');
        else
-          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),26)||' default null');
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),40)||' default null');
        end if;
     end if;
   end loop;
@@ -936,7 +980,7 @@ BEGIN
        elsif (cols(i).data_type like 'INTERVAL YEAR%') then
           bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||'yminterval_unconstrained default null');
        else
-          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),26)||' default null');
+          bld('    ,p_'||rpad(substr(lower(cols(i).column_name),1,110),cols(i).maxlen+2)||''||rpad(lower(regexp_replace(cols(i).data_type,'\(.*\)')),40)||' default null');
        end if;
     end if;
   end loop;
@@ -1160,13 +1204,15 @@ PROCEDURE generate_audit_trigger(p_owner varchar2
 BEGIN
   logger('Call to generate audit trigger for '||p_owner||'.'||p_table_name);
 
-  -- just in case someone called us directly
-  init(p_table_name=>l_audit_table_name);
-
   if not valid_schema(p_owner) then
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
 
+  -- just in case someone called us directly
+  init(p_table_name=>l_audit_table_name,
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>upper(p_action)='OUTPUT');
 
   if p_update_cols is null then
     begin
@@ -1467,6 +1513,10 @@ BEGIN
     die('Valid values for the audit flags are strings Y, N, NULL or left null');
   end if;
 
+  if not valid_schema(p_owner) then
+    die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
+  end if;
+  
   select count(*)
   into   l_exists
   from   dba_tables
@@ -1517,12 +1567,20 @@ BEGIN
       where table_name = l_table_name;
   end;
 
-  init(p_table_name=>l_table_name);
+  init(p_table_name=>l_table_name,
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>false);
 
   generate_audit_table(p_owner,p_table_name,l_created,l_altered,p_action);
   if l_created or l_altered or p_force then
     generate_audit_package(p_owner,p_table_name,p_action);
     generate_audit_trigger(p_owner,p_table_name,p_action,p_update_cols,p_when_clause,p_enable_trigger);
+  end if;
+  
+  if upper(p_action) = 'OUTPUT' then
+      logger('Rolling back entry in AUDIT_UTIL_SETTINGS since action is OUTPUT');
+      rollback;
   end if;
 END;
 
@@ -1538,12 +1596,15 @@ PROCEDURE drop_audit_table(p_owner varchar2
 BEGIN
   logger('Call to drop audit table for '||p_owner||'.'||p_table_name);
 
-  -- just in case someone called us directly
-  init(p_table_name=>audit_table_name(p_table_name,p_owner));
-
   if not valid_schema(p_owner) and not p_force then
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
+
+  -- just in case someone called us directly
+  init(p_table_name=>audit_table_name(p_table_name,p_owner),
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>false);
 
   select 1
   into   l_warning
@@ -1575,13 +1636,16 @@ PROCEDURE drop_audit_package(p_owner varchar2
 BEGIN
   logger('Call to drop audit package for '||p_owner||'.'||p_table_name);
 
-  -- just in case someone called us directly
-  init(p_table_name=>audit_table_name(p_table_name,p_owner));
-
   if not valid_schema(p_owner) and not p_force then
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
-  
+
+  -- just in case someone called us directly
+  init(p_table_name=>audit_table_name(p_table_name,p_owner),
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>false);
+ 
   do_sql('drop package '||g_aud_schema||'.'||audit_package_name(p_table_name,p_owner),upper(p_action)='EXECUTE');
 EXCEPTION
   when others then
@@ -1604,12 +1668,15 @@ PROCEDURE drop_audit_trigger(p_owner varchar2
 BEGIN
   logger('Call to drop audit trigger for '||p_owner||'.'||p_table_name);
 
-  -- just in case someone called us directly
-  init(p_table_name=>audit_table_name(p_table_name,p_owner));
-
   if not valid_schema(p_owner) and not p_force then
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
+
+  -- just in case someone called us directly
+  init(p_table_name=>audit_table_name(p_table_name,p_owner),
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>false);
   
   do_sql('drop trigger '||case when g_trigger_in_audit_schema then g_aud_schema else upper(p_owner) end||'.'||audit_trigger_name(p_table_name,p_owner),upper(p_action)='EXECUTE');
 EXCEPTION
@@ -1764,12 +1831,15 @@ BEGIN
 
   logger('Call to rename columns for '||p_owner||'.'||p_table_name);
 
-  -- just in case someone called us directly
-  init(p_table_name=>audit_table_name(p_table_name,p_owner));
-
   if not valid_schema(p_owner) then
     die('You can only manage audit facilities for schemas listed in SCHEMA_LIST');
   end if;
+
+  -- just in case someone called us directly
+  init(p_table_name=>audit_table_name(p_table_name,p_owner),
+       p_base_owner=>p_owner,
+       p_base_table=>p_table_name,
+       p_create_if_missing=>false);
   
   --
   -- first check for table

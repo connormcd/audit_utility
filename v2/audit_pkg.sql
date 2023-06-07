@@ -34,6 +34,16 @@ package body &&schema..audit_pkg is
 
   g_bulk_bind_limit constant int := 500;
 
+  function host_details return varchar2 is
+    l_host varchar2(1000);
+  begin
+    l_host := coalesce(owa_util.get_cgi_env('X-Forwarded-For'), owa_util.get_cgi_env('REMOTE_ADDR'), sys_context('userenv','host'));
+    return l_host;
+  exception
+    when others then
+      return sys_context('userenv','host');
+  end;
+
   procedure bulk_init is
   begin
     l_headers.delete;
@@ -66,8 +76,7 @@ package body &&schema..audit_pkg is
     l_headers(l_idx).descr      := p_descr;
     l_headers(l_idx).action     := sys_context('userenv','action');
     l_headers(l_idx).client_id  := sys_context('userenv','client_identifier');
-    --l_headers(l_idx).host       := sys_context('userenv','host');
-    l_headers(l_idx).host := coalesce(owa_util.get_cgi_env('X-Forwarded-For'), owa_util.get_cgi_env('REMOTE_ADDR'), sys_context('userenv','host'));
+    l_headers(l_idx).host       := host_details;
     l_headers(l_idx).module     := sys_context('userenv','module');
     l_headers(l_idx).os_user    := sys_context('userenv','os_user') ;
     
@@ -77,11 +86,12 @@ package body &&schema..audit_pkg is
   end;
 
   procedure log_header(
-    p_table_name      varchar2,
-    p_dml             varchar2,
-    p_descr           varchar2,
-    p_timestamp   out timestamp,
-    p_al_id       out number) is
+              p_table_name      varchar2,
+              p_dml             varchar2,
+              p_descr           varchar2,
+              p_timestamp   out timestamp,
+              p_al_id       out number) is
+    l_host varchar2(1000) :=    host_details; 
   begin
     insert into audit_header 
       ( aud$tstamp   
@@ -102,7 +112,7 @@ package body &&schema..audit_pkg is
      ,p_descr
      ,sys_context('userenv','action')
      ,sys_context('userenv','client_identifier')
-     ,sys_context('userenv','host')
+     ,l_host
      ,sys_context('userenv','module')
      ,sys_context('userenv','os_user')
     )
